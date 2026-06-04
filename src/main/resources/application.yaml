@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: mariver-api
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/mariver_db
+    username: mariver_user
+    password: mariverly-2023
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+  flyway:
+    enabled: true
+jwt:
+  secret: your-super-secret-key-that-is-at-least-32-characters
+  expiration: 86400000
