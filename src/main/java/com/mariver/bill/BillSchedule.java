@@ -3,6 +3,7 @@ package com.mariver.bill;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -30,6 +31,9 @@ public class BillSchedule {
     @Column(name = "interval_unit", nullable = false, length = 20)
     private IntervalUnit intervalUnit;
 
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
     @Column(name = "due_day")
     private Integer dueDay;
 
@@ -46,12 +50,13 @@ public class BillSchedule {
     private LocalDateTime updatedAt;
 
 
-    public BillSchedule( Bill bill, Integer intervalValue, IntervalUnit intervalUnit,
+    public BillSchedule( Bill bill, Integer intervalValue, IntervalUnit intervalUnit, LocalDate startDate,
                          Integer dueDay, Integer dueMonth)
     {
         this.bill = bill;
         this.intervalValue = intervalValue;
         this.intervalUnit = intervalUnit;
+        this.startDate = startDate;
         this.dueDay = dueDay;
         this.dueMonth = dueMonth;
     }

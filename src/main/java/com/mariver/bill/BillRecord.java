@@ -83,6 +83,9 @@ public class BillRecord {
     @Column(name = "paid_at", nullable = false)
     private LocalDateTime paidAt;
 
+    @Column(nullable = false)
+    private boolean paid =false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

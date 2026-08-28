@@ -5,6 +5,7 @@ import com.mariver.bill.IntervalUnit;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record BillRequest(
         @NotBlank
@@ -23,6 +24,9 @@ public record BillRequest(
 
         @NotNull
         IntervalUnit intervalUnit,
+
+        @NotNull
+        LocalDate startDate,
 
         @NotNull
         @Min(1)

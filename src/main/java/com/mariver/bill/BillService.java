@@ -30,29 +30,9 @@ public class BillService {
 
     @Transactional
     public BillResponse createBill(String email, BillRequest request) {
+
         User user = getUserByEmail(email);
-        validateSchedule(request);
-
-        Bill bill = new Bill(
-                user,
-                request.name(),
-                request.amount(),
-                request.category()
-        );
-
-        Bill savedBill = billRepository.save(bill);
-
-        BillSchedule schedule = new BillSchedule(
-                savedBill,
-                request.intervalValue(),
-                request.intervalUnit(),
-                request.dueDay(),
-                request.dueMonth()
-        );
-
-        BillSchedule savedSchedule = billScheduleRepository.save(schedule);
-
-        return toResponse(savedBill, savedSchedule);
+        return createBillHelper(user, request);
     }
 
     public List<BillResponse> getActiveBills(String email) {
@@ -140,6 +120,7 @@ public class BillService {
     }
 
     private User getUserByEmail(String email) {
+        System.out.println(email+ "uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu");
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
@@ -167,4 +148,46 @@ public class BillService {
                 )
         );
     }
+
+    @Transactional
+    public void createBills(String email, List<BillRequest> requests) {
+        User user = getUserByEmail(email);
+        requests.forEach(request -> createBillHelper(user, request));
+    }
+
+    private BillResponse createBillHelper(User user, BillRequest request) {
+        System.out.println(user+" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        String billName = request.name().trim();
+
+        if (billRepository.existsByUserAndNameIgnoreCase(user, billName)) {
+            throw new IllegalArgumentException(
+                    "A bill named '" + billName +"' already exists"
+            );}
+
+        validateSchedule(request);
+
+        Bill bill = new Bill(
+                user,
+                request.name(),
+                request.amount(),
+                request.category()
+        );
+
+        Bill savedBill = billRepository.save(bill);
+
+        BillSchedule schedule = new BillSchedule(
+                savedBill,
+                request.intervalValue(),
+                request.intervalUnit(),
+                request.startDate(),
+                request.dueDay(),
+                request.dueMonth()
+        );
+
+        BillSchedule savedSchedule = billScheduleRepository.save(schedule);
+
+        return toResponse(savedBill, savedSchedule);
+    }
+
 }

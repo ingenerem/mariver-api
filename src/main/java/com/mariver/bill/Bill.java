@@ -41,7 +41,7 @@ public class Bill {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     public Bill(User user, String name, BigDecimal estimatedAmount, BillCategory category) {

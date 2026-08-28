@@ -16,7 +16,10 @@ public class AccountController {
     @GetMapping("/me")
     public AccountResponse getMyAccount(Authentication authentication) {
 
-        String email = authentication.getName();
+
+        User user = (User) authentication.getPrincipal();
+        assert user != null;
+        String email = user.getEmail();
         return accountService.getMyAccount(email);
     }
 
@@ -24,6 +27,7 @@ public class AccountController {
     public AccountResponse updateMyAccount(@RequestBody @Valid AccountRequest request, Authentication authentication) {
 
         User user = (User) authentication.getPrincipal();
+
         return accountService.updateMyAccount(request, user.getEmail());
     }
 }

@@ -54,9 +54,7 @@ public class TransactionController {
     }
 
     @DeleteMapping("/{transactionId}")
-    public ResponseEntity<Void> deleteTransaction(
-            Authentication authentication,
-            @PathVariable Long transactionId
+    public ResponseEntity<Void> deleteTransaction(Authentication authentication, @PathVariable Long transactionId
     ) {
         transactionService.deleteTransaction(authentication.getName(), transactionId);
         return ResponseEntity.noContent().build();

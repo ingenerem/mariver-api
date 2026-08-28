@@ -5,6 +5,6 @@ import java.time.LocalDateTime;
 
 public record BillRecordResponse(Long id, Long billId, Long billScheduleId,
                                  String billName, Integer recordMonth,
-                                 Integer recordYear, BigDecimal actualAmount,
+                                 Integer recordYear, Integer dueDay, BigDecimal actualAmount,
                                  LocalDateTime paidAt, LocalDateTime createdAt) {
 }

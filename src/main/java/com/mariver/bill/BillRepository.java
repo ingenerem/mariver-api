@@ -13,4 +13,6 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     List<Bill> findByUserAndActiveFalse(User user);
 
     Optional<Bill> findByIdAndUser(Long billId, User user);
+
+    boolean existsByUserAndNameIgnoreCase(User user, String billName);
 }

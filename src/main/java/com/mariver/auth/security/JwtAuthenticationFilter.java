@@ -40,8 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+            FilterChain filterChain ) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -59,6 +58,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         String email = jwtService.extractEmail(token);
+        System.out.println(token);
+        System.out.println(email);
 
         /*
          * Only authenticate if:

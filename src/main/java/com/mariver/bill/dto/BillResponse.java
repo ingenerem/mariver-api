@@ -10,6 +10,6 @@ public record BillResponse(
         BigDecimal amount,
         BillCategory category,
         boolean active,
-        BillScheduleResponse schedule
-) {
+        BillScheduleResponse schedule)
+{
 }

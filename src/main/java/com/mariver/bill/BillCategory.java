@@ -4,8 +4,9 @@ public enum BillCategory {
     HOUSING,
     UTILITIES,
     INSURANCE,
+    SUBSCRIPTION,
+    TRANSPORTATION,
     CHILDCARE,
-    SUBSCRIPTIONS,
     DEBT,
     SAVINGS,
     OTHER
