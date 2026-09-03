@@ -49,4 +49,9 @@ public class AccountService {
                 account.getCreatedAt(), account.getUpdatedAt()
         );
     }
+
+    public Account getAccountByEmail(String email) {
+        return accountRepository.findByUserEmail(email).
+                orElseThrow(()-> new RuntimeException("User account not found"));
+    }
 }

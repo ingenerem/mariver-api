@@ -1,5 +1,7 @@
 package com.mariver.bill;
 
+import com.mariver.account.Account;
+import com.mariver.account.AccountService;
 import com.mariver.bill.dto.BillOccurrenceKey;
 import com.mariver.bill.dto.BillRecordRequest;
 import com.mariver.bill.dto.BillRecordResponse;
@@ -10,6 +12,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import java.time.LocalDateTime;
@@ -25,6 +28,7 @@ public class BillRecordService {
     private final BillScheduleRepository billScheduleRepository;
     private final BillRecordRepository billRecordRepository;
     private final UserRepository userRepository;
+    private final AccountService accountService;
 
     @Transactional
     public BillRecordResponse markBillPaid(String email, Long billRecordID) {
@@ -39,7 +43,14 @@ public class BillRecordService {
             throw new RuntimeException("Bill does not belong to user");
         }
 
-         billRecord.setPaid(true);
+        Account account = accountService.getAccountByEmail(email);
+
+        account.setCurrentBalance(
+                account.getCurrentBalance().subtract(billRecord.getActualAmount())
+        );
+
+
+        billRecord.setPaid(true);
          billRecord.setPaidAt(LocalDateTime.now());
 
         BillRecord savedRecord = billRecordRepository.save(billRecord);
@@ -47,6 +58,10 @@ public class BillRecordService {
         return mapToResponse(savedRecord);
     }
 
+    public BigDecimal getTotalUnpaidBills(String email){
+
+        return billRecordRepository.getTotalUnpaidBills(email);
+    }
 
     public List<BillRecordResponse> getUpcomingBills(String email) {
         synchronizeBillRecords(email);

@@ -14,11 +14,11 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
-    @GetMapping
+    @GetMapping("/summary")
     public DashboardResponse getDashboard(Authentication authentication) {
 
         User user = (User) authentication.getPrincipal();
-        return dashboardService.getDashboard(user.getEmail());
+        return dashboardService.getDashboardSummary(user.getEmail());
 
     }
 }
