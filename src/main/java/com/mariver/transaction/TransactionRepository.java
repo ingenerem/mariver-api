@@ -1,7 +1,12 @@
 package com.mariver.transaction;
 
+import com.mariver.transaction.dto.TransactionCategoryTotal;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -45,5 +50,47 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             TransactionStatus status,
             LocalDate startDate,
             LocalDate endDate
+    );
+
+
+    @Query("""
+    SELECT COALESCE(SUM(t.amount), 0)
+    FROM Transaction t
+    WHERE t.user.email = :email
+      AND t.type = :type
+      AND t.transactionSource = :transactionSource
+      AND t.status = :status
+      AND t.transactionDate >= :startDate
+      AND t.transactionDate < :endDate
+    """)
+    BigDecimal sumAmountByTypeAndSourceAndDateRange(
+            @Param("email") String email,
+            @Param("type") TransactionType type,
+            @Param("transactionSource") TransactionSource transactionSource,
+            @Param("status") TransactionStatus status,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query("""
+    SELECT
+        t.category AS category,
+        SUM(t.amount) AS totalAmount
+    FROM Transaction t
+    WHERE t.user.email = :email
+      AND t.type = 'EXPENSE'
+      AND t.transactionSource = :source
+      AND t.status = 'POSTED'
+      AND t.transactionDate >= :startDate
+      AND t.transactionDate < :endDate
+    GROUP BY t.category
+    ORDER BY SUM(t.amount) DESC
+    """)
+    List<TransactionCategoryTotal> findTopSpendingCategory(
+            String email,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable,
+            TransactionSource source
     );
 }

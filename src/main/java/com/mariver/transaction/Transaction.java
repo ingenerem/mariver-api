@@ -22,17 +22,11 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /*
-     * The user who owns this transaction.
-     */
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    /*
-     * The account whose balance is affected by this transaction.
-     * For MVP, each user has one account.
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
@@ -44,14 +38,12 @@ public class Transaction {
     @Column(nullable = false, length = 30)
     private TransactionType type;
 
-    /*
-     * For MVP:
-     * - Expense transactions should have a category.
-     * Income transactions should leave category as null
-     */
     @Enumerated(EnumType.STRING)
-    @Column(length = 50)
-    private TransactionCategory category;
+    @Column(name = "source", length = 50, nullable = false)
+    private TransactionSource transactionSource;
+
+    @Column(length = 50, nullable = false)
+    private String category;
 
     @Column(length = 255)
     private String description;

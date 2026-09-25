@@ -1,17 +1,39 @@
-version: '3.9'
-
 services:
   postgres:
     image: postgres:16
     container_name: mariver-postgres
+
     environment:
-      POSTGRES_DB: mariver_db
-      POSTGRES_USER: mariver_user
-      POSTGRES_PASSWORD: mariverly-2023
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
     ports:
       - "5433:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: mariver-api
+
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      SHOW_SQL: ${SHOW_SQL}
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - postgres
 
 volumes:
   postgres_data:

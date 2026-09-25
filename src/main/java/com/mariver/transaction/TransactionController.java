@@ -2,8 +2,11 @@ package com.mariver.transaction;
 
 import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.transaction.dto.TransactionResponse;
+import com.mariver.transaction.dto.TransactionSummaryResponse;
+import com.mariver.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -18,45 +21,54 @@ public class TransactionController {
 
     private final TransactionService transactionService;
 
-    @PostMapping
-    public ResponseEntity<TransactionResponse> createTransaction(
+    @PostMapping("/batch")
+    public ResponseEntity<String> createTransactions(
             Authentication authentication,
-            @RequestBody TransactionRequest request
-    ) {
-        return ResponseEntity.ok(
-                transactionService.createTransaction(authentication.getName(), request)
-        );
-    }
+            @RequestBody List<TransactionRequest> requests) {
 
-    @GetMapping
-    public ResponseEntity<List<TransactionResponse>> getTransactions(
-            Authentication authentication,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate startDate,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate endDate
-    ) {
-        if (startDate != null && endDate != null) {
-            return ResponseEntity.ok(
-                    transactionService.getPostedTransactionsByDateRange(
-                            authentication.getName(),
-                            startDate,
-                            endDate
-                    )
-            );
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+
+        try {
+            transactionService.createTransactions(email, requests);
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body("transactions saved successfully.");
+        } catch (RuntimeException ex) {
+            return ResponseEntity
+                    .badRequest()
+                    .body(ex.getMessage());
         }
 
-        return ResponseEntity.ok(
-                transactionService.getPostedTransactions(authentication.getName())
-        );
     }
 
+
+    @GetMapping
+    public ResponseEntity<List<TransactionResponse>> getCurrentMonthTransactions(
+            Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+            return ResponseEntity.ok(
+                    transactionService.getCurrentMonthPostedTransactions(email));
+        }
+
+
+
     @DeleteMapping("/{transactionId}")
-    public ResponseEntity<Void> deleteTransaction(Authentication authentication, @PathVariable Long transactionId
-    ) {
+    public ResponseEntity<Void> deleteTransaction(Authentication authentication, @PathVariable Long transactionId) {
         transactionService.deleteTransaction(authentication.getName(), transactionId);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/summary")
+    public ResponseEntity<TransactionSummaryResponse> getTransactionsSummary(Authentication authentication)
+    {
+
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+        TransactionSummaryResponse summary =
+                transactionService.calculateSummaryTransactions(email);
+        return ResponseEntity.ok(summary);
     }
 }

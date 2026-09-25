@@ -17,15 +17,17 @@ public class BillService {
     private final BillRepository billRepository;
     private final BillScheduleRepository billScheduleRepository;
     private final UserRepository userRepository;
+    private final BillRecordService billRecordService;
 
     public BillService(
             BillRepository billRepository,
             BillScheduleRepository billScheduleRepository,
-            UserRepository userRepository)
+            UserRepository userRepository, BillRecordService billRecordService)
     {
         this.billRepository = billRepository;
         this.billScheduleRepository = billScheduleRepository;
         this.userRepository = userRepository;
+        this.billRecordService = billRecordService;
     }
 
     @Transactional
@@ -120,7 +122,6 @@ public class BillService {
     }
 
     private User getUserByEmail(String email) {
-        System.out.println(email+ "uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu");
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
@@ -156,7 +157,6 @@ public class BillService {
     }
 
     private BillResponse createBillHelper(User user, BillRequest request) {
-        System.out.println(user+" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
         String billName = request.name().trim();
 
@@ -186,6 +186,7 @@ public class BillService {
         );
 
         BillSchedule savedSchedule = billScheduleRepository.save(schedule);
+        billRecordService.createBillRecord(schedule);
 
         return toResponse(savedBill, savedSchedule);
     }

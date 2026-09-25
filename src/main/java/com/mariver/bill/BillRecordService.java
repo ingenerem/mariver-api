@@ -6,6 +6,11 @@ import com.mariver.bill.dto.BillOccurrenceKey;
 import com.mariver.bill.dto.BillRecordRequest;
 import com.mariver.bill.dto.BillRecordResponse;
 import com.mariver.common.utils.TimeSnapshot;
+import com.mariver.transaction.Transaction;
+import com.mariver.transaction.TransactionService;
+import com.mariver.transaction.TransactionSource;
+import com.mariver.transaction.TransactionType;
+import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.user.User;
 import com.mariver.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -29,6 +34,7 @@ public class BillRecordService {
     private final BillRecordRepository billRecordRepository;
     private final UserRepository userRepository;
     private final AccountService accountService;
+    private final TransactionService transactionService;
 
     @Transactional
     public BillRecordResponse markBillPaid(String email, Long billRecordID) {
@@ -45,15 +51,14 @@ public class BillRecordService {
 
         Account account = accountService.getAccountByEmail(email);
 
-        account.setCurrentBalance(
-                account.getCurrentBalance().subtract(billRecord.getActualAmount())
-        );
-
-
         billRecord.setPaid(true);
-         billRecord.setPaidAt(LocalDateTime.now());
+        billRecord.setPaidAt(LocalDateTime.now());
+        TransactionRequest transactionRequest = new TransactionRequest(billRecord.getActualAmount(), TransactionType.EXPENSE,
+                billRecord.getBill().getName(), billRecord.getBill().getCategory().toString(),
+                billRecord.getPaidAt().toLocalDate(), TransactionSource.BILL);
 
         BillRecord savedRecord = billRecordRepository.save(billRecord);
+        transactionService.createTransaction(user, account, transactionRequest);
 
         return mapToResponse(savedRecord);
     }
@@ -64,7 +69,7 @@ public class BillRecordService {
     }
 
     public List<BillRecordResponse> getUpcomingBills(String email) {
-        synchronizeBillRecords(email);
+        //synchronizeBillRecords(email);
 
         LocalDate today = LocalDate.now();
 
@@ -148,26 +153,20 @@ public class BillRecordService {
 
     }
 
-//    public List<BillRecordResponse> getPaidBillsThisMonth(String email) {
-//
-//        LocalDate today = LocalDate.now();
-//        LocalDate startOfMonth = today.with(TemporalAdjusters.firstDayOfMonth());
-//        LocalDate endOfMonth = today.with(TemporalAdjusters.lastDayOfMonth());
-//
-//        return billRecordRepository
-//                .findByBillUserEmailAndPaidTrueAndDueDateBetweenOrderByDueDateDesc(
-//                        email,startOfMonth, endOfMonth).stream().map(this::mapToResponse).toList();
-//    }
+    public void createBillRecord(BillSchedule billSchedule) {
 
-//    public List<BillRecordResponse> getOverdueBills(String email) {
-//
-//        LocalDate today = LocalDate.now();
-//
-//        return billRecordRepository
-//                .findByBillUserEmailAndPaidFalseAndDueDateBeforeOrderByDueDateAsc(email, today)
-//                .stream().map(this::mapToResponse)
-//                .toList();
-//    }
+        TimeSnapshot timeSnapshot = TimeSnapshot.currentDate();
+        BillRecord newBillRecord = BillRecord.builder()
+                .bill(billSchedule.getBill())
+                .billSchedule(billSchedule)
+                .recordMonth(timeSnapshot.month())
+                .recordYear(timeSnapshot.year())
+                .actualAmount(billSchedule.getBill().getEstimatedAmount())
+                .paidAt(null)
+                .build();
+      billRecordRepository.save(newBillRecord);
+
+    }
 
     private BillRecordResponse mapToResponse(BillRecord billRecord) {
         return new BillRecordResponse(

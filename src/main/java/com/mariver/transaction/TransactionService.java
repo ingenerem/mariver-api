@@ -2,12 +2,16 @@ package com.mariver.transaction;
 
 import com.mariver.account.Account;
 import com.mariver.account.AccountRepository;
+import com.mariver.common.utils.DateRange;
+import com.mariver.transaction.dto.TransactionCategoryTotal;
 import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.transaction.dto.TransactionResponse;
+import com.mariver.transaction.dto.TransactionSummaryResponse;
 import com.mariver.user.User;
 import com.mariver.user.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,19 +26,27 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private TransactionResponse transactionResponse;
 
     @Transactional
-    public TransactionResponse createTransaction(String email, TransactionRequest request) {
+    public void createTransactions(String email, List<TransactionRequest> requests) {
         User user = getUserByEmail(email);
         Account account = getUserAccount(user);
+        requests.forEach(request -> createTransaction(user, account, request));
+
+    }
+
+
+    public void createTransaction(User user, Account account, TransactionRequest request) {
+
 
         validateTransactionRequest(request);
-
         Transaction transaction = Transaction.builder()
                 .user(user)
                 .account(account)
                 .amount(request.amount())
                 .type(request.type())
+                .transactionSource(request.transactionSource())
                 .category(request.category())
                 .description(request.description())
                 .transactionDate(
@@ -47,32 +59,28 @@ public class TransactionService {
 
         applyTransactionToAccount(account, transaction);
 
-        Transaction savedTransaction = transactionRepository.save(transaction);
+        transactionRepository.save(transaction);
         accountRepository.save(account);
-
-        return mapToResponse(savedTransaction);
     }
 
-    public List<TransactionResponse> getPostedTransactions(String email) {
-        return transactionRepository
-                .findByUserEmailAndStatusOrderByTransactionDateDescCreatedAtDesc(
-                        email,
-                        TransactionStatus.POSTED
-                )
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+    public List<TransactionResponse> getCurrentMonthPostedTransactions(String email) {
+
+        DateRange dateRange = DateRange.currentMonth();
+        return getPostedTransactionsByDateRange
+                (email, TransactionStatus.POSTED, dateRange.startDate(), dateRange.endDate());
+
     }
 
-    public List<TransactionResponse> getPostedTransactionsByDateRange(
-            String email,
+    private List<TransactionResponse> getPostedTransactionsByDateRange(
+            String email, TransactionStatus status,
             LocalDate startDate,
             LocalDate endDate
     ) {
+
         return transactionRepository
                 .findByUserEmailAndStatusAndTransactionDateBetweenOrderByTransactionDateDescCreatedAtDesc(
                         email,
-                        TransactionStatus.POSTED,
+                        status,
                         startDate,
                         endDate
                 )
@@ -137,8 +145,8 @@ public class TransactionService {
             throw new RuntimeException("Transaction type is required");
         }
 
-        if (request.category() == null) {
-            throw new RuntimeException("Transaction category is required");
+        if (request.transactionSource() == null) {
+            throw new RuntimeException("Transaction category is source");
         }
     }
 
@@ -157,11 +165,75 @@ public class TransactionService {
                 transaction.getId(),
                 transaction.getAmount(),
                 transaction.getType(),
+                transaction.getTransactionSource(),
                 transaction.getCategory(),
                 transaction.getDescription(),
                 transaction.getTransactionDate(),
                 transaction.getStatus(),
                 transaction.getCreatedAt()
         );
+    }
+
+
+    @Transactional
+    public TransactionSummaryResponse calculateSummaryTransactions(String email) {
+
+        DateRange dateRange = DateRange.currentMonth();
+        LocalDate startDate = dateRange.startDate();
+        LocalDate endDate = dateRange.endDate();
+        // Bills
+        BigDecimal totalBills = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
+                email,
+                TransactionType.EXPENSE,
+                TransactionSource.BILL,
+                TransactionStatus.POSTED,
+                startDate,
+                endDate
+        );
+        // Other spending
+        BigDecimal totalSpending = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
+                email,
+                TransactionType.EXPENSE,
+                TransactionSource.SPENDING,
+                TransactionStatus.POSTED,
+                startDate,
+                endDate
+        );
+        // Income
+        BigDecimal totalIncome = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
+                email,
+                TransactionType.INCOME,
+                TransactionSource.INCOME,
+                TransactionStatus.POSTED,
+                startDate,
+                endDate
+        );
+
+        List<TransactionCategoryTotal> maxTransaction =
+                transactionRepository.findTopSpendingCategory(
+                        email,
+                        dateRange.startDate(),
+                        dateRange.endDate(),
+                        PageRequest.of(0, 1),
+                        TransactionSource.SPENDING
+                );
+
+        TransactionCategoryTotal topSpendingCategory = maxTransaction.isEmpty() ? null : maxTransaction.getFirst();
+
+
+        List<TransactionCategoryTotal> maxBill =
+                transactionRepository.findTopSpendingCategory(
+                        email,
+                        dateRange.startDate(),
+                        dateRange.endDate(),
+                        PageRequest.of(0, 1),
+                        TransactionSource.BILL
+                );
+
+        TransactionCategoryTotal topBillCategory = maxBill.isEmpty() ? null : maxBill.getFirst();
+
+        BigDecimal totalExpenses = totalSpending.add(totalBills);
+        return new TransactionSummaryResponse(totalIncome, totalExpenses, totalSpending, totalBills, topSpendingCategory,topBillCategory );
+
     }
 }
