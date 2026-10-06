@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -45,12 +46,12 @@ public class BillRecordController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("{billRecordId}/pay")
+    @PostMapping("{billRecordId}/{paidDate}/pay")
     public ResponseEntity<BillRecordResponse> markBillPaid(
-            Authentication authentication, @PathVariable Long billRecordId)
+            Authentication authentication, @PathVariable Long billRecordId, @PathVariable LocalDate paidDate)
     {
         User user = (User) authentication.getPrincipal();
-        return ResponseEntity.ok(billRecordService.markBillPaid(user.getEmail(), billRecordId));
+        return ResponseEntity.ok(billRecordService.markBillPaid(user.getEmail(), billRecordId, paidDate));
     }
 
 

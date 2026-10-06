@@ -233,7 +233,7 @@ public class TransactionService {
         TransactionCategoryTotal topBillCategory = maxBill.isEmpty() ? null : maxBill.getFirst();
 
         BigDecimal totalExpenses = totalSpending.add(totalBills);
-        return new TransactionSummaryResponse(totalIncome, totalExpenses, totalSpending, totalBills, topSpendingCategory,topBillCategory );
+        return new TransactionSummaryResponse(totalIncome, totalExpenses,totalBills, totalSpending, topSpendingCategory,topBillCategory );
 
     }
 }

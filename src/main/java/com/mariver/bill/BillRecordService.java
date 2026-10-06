@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -37,7 +38,7 @@ public class BillRecordService {
     private final TransactionService transactionService;
 
     @Transactional
-    public BillRecordResponse markBillPaid(String email, Long billRecordID) {
+    public BillRecordResponse markBillPaid(String email, Long billRecordID, LocalDate paidDate) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -52,7 +53,7 @@ public class BillRecordService {
         Account account = accountService.getAccountByEmail(email);
 
         billRecord.setPaid(true);
-        billRecord.setPaidAt(LocalDateTime.now());
+        billRecord.setPaidAt(paidDate.atStartOfDay());
         TransactionRequest transactionRequest = new TransactionRequest(billRecord.getActualAmount(), TransactionType.EXPENSE,
                 billRecord.getBill().getName(), billRecord.getBill().getCategory().toString(),
                 billRecord.getPaidAt().toLocalDate(), TransactionSource.BILL);
@@ -139,15 +140,7 @@ public class BillRecordService {
             //Save the new record if it doesn't exist already
             if(!existingKeys.contains(newKey)){
                 //Add the record to the db
-                BillRecord newBillRecord = BillRecord.builder()
-                        .bill(schedule.getBill())
-                        .billSchedule(schedule)
-                        .recordMonth(timeSnapshot.month())
-                        .recordYear(timeSnapshot.year())
-                        .actualAmount(schedule.getBill().getEstimatedAmount())
-                        .paidAt(null)
-                        .build();
-                billRecordRepository.save(newBillRecord);
+                createBillRecord(schedule);
             }
         }
 
@@ -156,6 +149,17 @@ public class BillRecordService {
     public void createBillRecord(BillSchedule billSchedule) {
 
         TimeSnapshot timeSnapshot = TimeSnapshot.currentDate();
+        YearMonth yearMonth = YearMonth.of(timeSnapshot.year(), timeSnapshot.month());
+
+        int actualDueDay = Math.min(
+                billSchedule.getDueDay(),
+                yearMonth.lengthOfMonth()
+        );
+
+        System.out.println(actualDueDay+" pppppppppppppppppppppppppppppp");
+         billSchedule.setDueDay(actualDueDay);
+        System.out.println(billSchedule.getDueDay()+" pppppppppppppppppppppppppppppp");
+
         BillRecord newBillRecord = BillRecord.builder()
                 .bill(billSchedule.getBill())
                 .billSchedule(billSchedule)
