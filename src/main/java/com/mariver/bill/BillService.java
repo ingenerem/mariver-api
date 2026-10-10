@@ -47,6 +47,13 @@ public class BillService {
                 .toList();
     }
 
+
+    public List<BillResponse> getAllBills(String email) {
+        User user = getUserByEmail(email);
+        return billRepository.findAllByUserEmail(email).stream().map(this::toResponse).toList();
+
+    }
+
     public List<BillResponse> getInactiveBills(String email) {
         User user = getUserByEmail(email);
 
@@ -69,6 +76,7 @@ public class BillService {
         }
 
         bill.setName(request.name());
+
         bill.setEstimatedAmount(request.amount());
         bill.setCategory(request.category());
 
@@ -77,8 +85,7 @@ public class BillService {
 
         schedule.setIntervalValue(request.intervalValue());
         schedule.setIntervalUnit(request.intervalUnit());
-        schedule.setDueDay(request.dueDay());
-        schedule.setDueMonth(request.dueMonth());
+        schedule.setNextDueDate(request.startDate());
 
         return toResponse(bill, schedule);
     }
@@ -98,20 +105,17 @@ public class BillService {
     }
 
     private void validateSchedule(BillRequest request) {
-        if (request.intervalValue() != 1) {
-            throw new RuntimeException("Only monthly and yearly bills are supported for now");
+
+        if (request.startDate() == null) {
+            throw new IllegalArgumentException("Start date is required");
         }
 
-        if (request.intervalUnit() == IntervalUnit.MONTH && request.dueMonth() != null) {
-            throw new RuntimeException("Monthly bills should not have a due month");
+        if (request.intervalValue() == null || request.intervalValue() <= 0) {
+            throw new IllegalArgumentException("Interval value must be greater than 0");
         }
 
-        if (request.intervalUnit() == IntervalUnit.YEAR && request.dueMonth() == null) {
-            throw new RuntimeException("Yearly bills must have a due month");
-        }
-
-        if (request.intervalUnit() == IntervalUnit.WEEK) {
-            throw new RuntimeException("Weekly bills are not supported yet");
+        if (request.intervalUnit() == null) {
+            throw new IllegalArgumentException("Interval unit is required");
         }
     }
 
@@ -143,10 +147,12 @@ public class BillService {
                 bill.isActive(),
                 new BillScheduleResponse(
                         schedule.getId(),
+                        schedule.isActive(),
                         schedule.getIntervalValue(),
                         schedule.getIntervalUnit(),
-                        schedule.getDueDay(),
-                        schedule.getDueMonth()
+                        schedule.getStartDate(),
+                        schedule.isAutoPay(),
+                        schedule.getNextDueDate()
                 )
         );
     }
@@ -161,33 +167,37 @@ public class BillService {
 
         String billName = request.name().trim();
 
+        if (request.autoPay() && request.paymentType() == PaymentType.VARIABLE) {
+            throw new IllegalArgumentException("Auto pay is not supported for variable bills");
+        }
         if (billRepository.existsByUserAndNameIgnoreCase(user, billName)) {
-            throw new IllegalArgumentException(
-                    "A bill named '" + billName +"' already exists"
-            );}
+            throw new IllegalArgumentException("A bill named '" + billName +"' already exists");
+        }
 
         validateSchedule(request);
 
-        Bill bill = new Bill(
-                user,
-                request.name(),
-                request.amount(),
-                request.category()
-        );
+        Bill bill = Bill.builder()
+                .user(user)
+                .name(request.name().trim())
+                .category(request.category())
+                .estimatedAmount(request.amount())
+                .paymentType(request.paymentType())
+                .build();
+
+        billRepository.save(bill);
 
         Bill savedBill = billRepository.save(bill);
 
-        BillSchedule schedule = new BillSchedule(
-                savedBill,
-                request.intervalValue(),
-                request.intervalUnit(),
-                request.startDate(),
-                request.dueDay(),
-                request.dueMonth()
-        );
+        BillSchedule billSchedule = BillSchedule.builder()
+                .bill(savedBill)
+                .intervalValue(request.intervalValue())
+                .intervalUnit(request.intervalUnit())
+                .startDate(request.startDate())
+                .nextDueDate(request.startDate())
+                .autoPay(request.autoPay())
+                .build();
 
-        BillSchedule savedSchedule = billScheduleRepository.save(schedule);
-        billRecordService.createBillRecord(schedule);
+        BillSchedule savedSchedule = billScheduleRepository.save(billSchedule);
 
         return toResponse(savedBill, savedSchedule);
     }

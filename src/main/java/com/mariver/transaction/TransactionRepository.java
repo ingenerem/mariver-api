@@ -78,7 +78,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
         SUM(t.amount) AS totalAmount
     FROM Transaction t
     WHERE t.user.email = :email
-      AND t.type = 'EXPENSE'
+      AND t.type = 'OUTFLOW'
       AND t.transactionSource = :source
       AND t.status = 'POSTED'
       AND t.transactionDate >= :startDate

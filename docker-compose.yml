@@ -28,6 +28,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       SHOW_SQL: ${SHOW_SQL}
+      TZ: America/New_York
 
     ports:
       - "8080:8080"

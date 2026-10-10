@@ -3,6 +3,8 @@ package com.mariver.bill;
 import com.mariver.user.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -20,7 +22,6 @@ public class Bill {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Many bills can belong to one user.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -28,47 +29,34 @@ public class Bill {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "estimated_amount", nullable = false, precision = 12, scale = 2)
-    private BigDecimal estimatedAmount;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private BillCategory category;
 
+    @Column(name = "estimated_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal estimatedAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_type", nullable = false, length = 30)
+    private PaymentType paymentType;
+
     @Column(nullable = false)
+    @Builder.Default
     private boolean active = true;
 
-    @Column(name = "created_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public Bill(User user, String name, BigDecimal estimatedAmount, BillCategory category) {
-        this.user = user;
-        this.name = name;
-        this.estimatedAmount = estimatedAmount;
-        this.category = category;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void deactivate(){
+    public void deactivate() {
         this.active = false;
     }
 
-    public void activate(){
+    public void activate() {
         this.active = true;
     }
-
 }

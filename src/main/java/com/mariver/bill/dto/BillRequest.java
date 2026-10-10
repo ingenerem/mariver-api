@@ -2,6 +2,7 @@ package com.mariver.bill.dto;
 
 import com.mariver.bill.BillCategory;
 import com.mariver.bill.IntervalUnit;
+import com.mariver.bill.PaymentType;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
@@ -26,15 +27,13 @@ public record BillRequest(
         IntervalUnit intervalUnit,
 
         @NotNull
+        @FutureOrPresent
         LocalDate startDate,
 
         @NotNull
-        @Min(1)
-        @Max(31)
-        Integer dueDay,
+        boolean autoPay,
 
-        @Min(1)
-        @Max(12)
-        Integer dueMonth )
+        @NotNull
+        PaymentType paymentType)
 {
 }

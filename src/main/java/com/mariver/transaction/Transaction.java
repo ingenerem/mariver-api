@@ -4,6 +4,8 @@ import com.mariver.account.Account;
 import com.mariver.user.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,7 +24,6 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -31,18 +32,25 @@ public class Transaction {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
+    @Column(nullable = false, length = 100)
+    private String name;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "auto_paid", nullable = false)
+    @Builder.Default
+    private boolean autoPaid = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private TransactionType type;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "source", length = 50, nullable = false)
+    @Column(name = "source", nullable = false, length = 50)
     private TransactionSource transactionSource;
 
-    @Column(length = 50, nullable = false)
+    @Column(nullable = false, length = 50)
     private String category;
 
     @Column(length = 255)
@@ -53,7 +61,8 @@ public class Transaction {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private TransactionStatus status;
+    @Builder.Default
+    private TransactionStatus status = TransactionStatus.POSTED;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -61,30 +70,11 @@ public class Transaction {
     @Column(name = "delete_reason", length = 255)
     private String deleteReason;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @PrePersist
-    void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
-
-        this.createdAt = now;
-        this.updatedAt = now;
-
-        if (this.transactionDate == null) {
-            this.transactionDate = LocalDate.now();
-        }
-
-        if (this.status == null) {
-            this.status = TransactionStatus.POSTED;
-        }
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }
