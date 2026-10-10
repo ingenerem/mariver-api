@@ -49,8 +49,7 @@ public class BillController {
     }
 
     @GetMapping
-    public ResponseEntity<List<BillResponse>> getActiveBills(
-            Authentication authentication) {
+    public ResponseEntity<List<BillResponse>> getActiveBills(Authentication authentication) {
 
         User user = (User) authentication.getPrincipal();
         String email = user.getEmail();
@@ -58,28 +57,39 @@ public class BillController {
     }
 
     @GetMapping("/inactive")
-    public ResponseEntity<List<BillResponse>> getInactiveBills(
-            Authentication authentication
-    ) {
-        return ResponseEntity.ok(billService.getInactiveBills(authentication.getName()) );
+    public ResponseEntity<List<BillResponse>> getInactiveBills(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+        return ResponseEntity.ok(billService.getInactiveBills(email) );
     }
 
     @PatchMapping("/{billId}")
-    public ResponseEntity<BillResponse> updateBill(
-            Authentication authentication,
-            @PathVariable Long billId,
-            @RequestBody BillRequest request) {
+    public ResponseEntity<BillResponse> updateBill(Authentication authentication, @PathVariable Long billId,
+                                                   @RequestBody BillRequest request) {
+
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
         return ResponseEntity.ok(
-                billService.updateBill(authentication.getName(), billId, request)
+                billService.updateBill(email, billId, request)
         );
     }
 
-    @DeleteMapping("/{billId}")
-    public ResponseEntity<Void> deactivateBill(
-            Authentication authentication,
-            @PathVariable Long billId) {
-        billService.deactivateBill(authentication.getName(), billId);
+    @DeleteMapping("/{billId}/deactivate")
+    public ResponseEntity<Void> deactivateBill(Authentication authentication, @PathVariable Long billId) {
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+        billService.deactivateBill(email, billId);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/allBills")
+    public ResponseEntity<List<BillResponse>> getAllBills(
+            Authentication authentication) {
+
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+        return ResponseEntity.ok( billService.getAllBills(email));
     }
 
 }

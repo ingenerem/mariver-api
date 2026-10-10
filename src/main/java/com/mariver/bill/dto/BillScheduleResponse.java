@@ -2,10 +2,9 @@ package com.mariver.bill.dto;
 
 import com.mariver.bill.IntervalUnit;
 
-public record BillScheduleResponse(
-        Long id,
-        Integer intervalValue,
-        IntervalUnit intervalUnit,
-        Integer dueDay,
-        Integer dueMonth) {
-}
+import java.time.LocalDate;
+
+public record BillScheduleResponse( Long id, boolean active, Integer intervalValue,
+                                    IntervalUnit intervalUnit, LocalDate startDate,
+                                    boolean autoPay, LocalDate nextDueDate)
+{ }

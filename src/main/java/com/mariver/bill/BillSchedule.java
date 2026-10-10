@@ -2,6 +2,8 @@ package com.mariver.bill;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -19,7 +21,6 @@ public class BillSchedule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // For MVP: one bill has one schedule.
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bill_id", nullable = false, unique = true)
     private Bill bill;
@@ -34,44 +35,22 @@ public class BillSchedule {
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
-    @Column(name = "due_day")
-    private Integer dueDay;
+    @Column(name = "next_due_date", nullable = false)
+    private LocalDate nextDueDate;
 
-    @Column(name = "due_month")
-    private Integer dueMonth;
+    @Column(name = "auto_pay", nullable = false)
+    @Builder.Default
+    private boolean autoPay = false;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean active = true;
 
-    @Column(name = "created_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-
-    public BillSchedule( Bill bill, Integer intervalValue, IntervalUnit intervalUnit, LocalDate startDate,
-                         Integer dueDay, Integer dueMonth)
-    {
-        this.bill = bill;
-        this.intervalValue = intervalValue;
-        this.intervalUnit = intervalUnit;
-        this.startDate = startDate;
-        this.dueDay = dueDay;
-        this.dueMonth = dueMonth;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    // Add getters and setters
 }

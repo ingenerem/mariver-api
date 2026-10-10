@@ -2,6 +2,7 @@ package com.mariver.transaction;
 
 import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.transaction.dto.TransactionResponse;
+import com.mariver.transaction.dto.TransactionReversalRequest;
 import com.mariver.transaction.dto.TransactionSummaryResponse;
 import com.mariver.user.User;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @RestController
@@ -20,6 +22,7 @@ import java.util.List;
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final TransactionReversalService transactionReversalService;
 
     @PostMapping("/batch")
     public ResponseEntity<String> createTransactions(
@@ -42,22 +45,20 @@ public class TransactionController {
 
     }
 
-
     @GetMapping
-    public ResponseEntity<List<TransactionResponse>> getCurrentMonthTransactions(
-            Authentication authentication) {
+    public ResponseEntity<List<TransactionResponse>> getMonthTransactions(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            Authentication authentication
+    ) {
+        YearMonth selectedMonth = year == null
+                ? YearMonth.now()
+                : YearMonth.of(year, month);
+
         User user = (User) authentication.getPrincipal();
         String email = user.getEmail();
-            return ResponseEntity.ok(
-                    transactionService.getCurrentMonthPostedTransactions(email));
-        }
-
-
-
-    @DeleteMapping("/{transactionId}")
-    public ResponseEntity<Void> deleteTransaction(Authentication authentication, @PathVariable Long transactionId) {
-        transactionService.deleteTransaction(authentication.getName(), transactionId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(
+                transactionService.getCurrentMonthPostedTransactions(email, selectedMonth));
     }
 
 
@@ -70,5 +71,18 @@ public class TransactionController {
         TransactionSummaryResponse summary =
                 transactionService.calculateSummaryTransactions(email);
         return ResponseEntity.ok(summary);
+    }
+
+    @PostMapping("/{transactionId}/reverse")
+    public ResponseEntity<Void> reverseTransaction(Authentication authentication,
+                                                   @PathVariable Long transactionId,
+                                                   @RequestBody TransactionReversalRequest request) {
+
+        User user = (User) authentication.getPrincipal();
+        String email = user.getEmail();
+
+        transactionReversalService.reverseTransaction(email, transactionId, request.reason());
+
+        return ResponseEntity.noContent().build();
     }
 }

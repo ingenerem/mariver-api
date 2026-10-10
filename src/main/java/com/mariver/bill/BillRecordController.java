@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -46,12 +47,22 @@ public class BillRecordController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("{billRecordId}/{paidDate}/pay")
+
+    @PostMapping("/autoPay")
+    public ResponseEntity<Void> processAutoPay(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        billRecordService.processAutoPayBills(user.getEmail());
+        return ResponseEntity.noContent().build();
+    }
+
+
+    @PostMapping("{billRecordId}/{paidDate}/{amount}/pay")
     public ResponseEntity<BillRecordResponse> markBillPaid(
-            Authentication authentication, @PathVariable Long billRecordId, @PathVariable LocalDate paidDate)
+            Authentication authentication, @PathVariable Long billRecordId, @PathVariable LocalDate paidDate,
+            @PathVariable BigDecimal amount)
     {
         User user = (User) authentication.getPrincipal();
-        return ResponseEntity.ok(billRecordService.markBillPaid(user.getEmail(), billRecordId, paidDate));
+        return ResponseEntity.ok(billRecordService.markBillPaid(user.getEmail(), billRecordId, paidDate, amount, false));
     }
 
 

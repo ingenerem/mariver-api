@@ -2,14 +2,8 @@ package com.mariver.bill;
 
 import com.mariver.account.Account;
 import com.mariver.account.AccountService;
-import com.mariver.bill.dto.BillOccurrenceKey;
-import com.mariver.bill.dto.BillRecordRequest;
 import com.mariver.bill.dto.BillRecordResponse;
-import com.mariver.common.utils.TimeSnapshot;
-import com.mariver.transaction.Transaction;
-import com.mariver.transaction.TransactionService;
-import com.mariver.transaction.TransactionSource;
-import com.mariver.transaction.TransactionType;
+import com.mariver.transaction.*;
 import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.user.User;
 import com.mariver.user.UserRepository;
@@ -20,11 +14,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,8 +27,9 @@ public class BillRecordService {
     private final AccountService accountService;
     private final TransactionService transactionService;
 
+
     @Transactional
-    public BillRecordResponse markBillPaid(String email, Long billRecordID, LocalDate paidDate) {
+    public BillRecordResponse markBillPaid(String email, Long billRecordID, LocalDate paidDate, BigDecimal actualAmount, boolean autoPaid) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -46,21 +37,27 @@ public class BillRecordService {
         BillRecord billRecord = billRecordRepository.findById(billRecordID)
                 .orElseThrow(() -> new RuntimeException("Bill record not found"));
 
-        if (!billRecord.getBill().getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Bill does not belong to user");
-        }
-
+        Bill bill = billRecord.getBillSchedule().getBill();
         Account account = accountService.getAccountByEmail(email);
 
+
+        TransactionRequest transactionRequest = new TransactionRequest(
+                bill.getName(),
+                actualAmount,
+                TransactionType.OUTFLOW,
+                "Scheduled bill",
+                TransactionSource.BILL,
+                bill.getCategory().name(),
+                paidDate
+        );
+        Transaction savedTransaction = transactionService.createTransaction(email, transactionRequest, autoPaid);
+
+        billRecord.setPaidDate(paidDate);
+        billRecord.setActualAmount(actualAmount);
         billRecord.setPaid(true);
-        billRecord.setPaidAt(paidDate.atStartOfDay());
-        TransactionRequest transactionRequest = new TransactionRequest(billRecord.getActualAmount(), TransactionType.EXPENSE,
-                billRecord.getBill().getName(), billRecord.getBill().getCategory().toString(),
-                billRecord.getPaidAt().toLocalDate(), TransactionSource.BILL);
+        billRecord.setTransaction(savedTransaction);
 
         BillRecord savedRecord = billRecordRepository.save(billRecord);
-        transactionService.createTransaction(user, account, transactionRequest);
-
         return mapToResponse(savedRecord);
     }
 
@@ -70,15 +67,11 @@ public class BillRecordService {
     }
 
     public List<BillRecordResponse> getUpcomingBills(String email) {
-        //synchronizeBillRecords(email);
 
         LocalDate today = LocalDate.now();
-
-        int currentYear = today.getYear();
-        Integer currentMonth = today.getMonthValue();
-        Integer currentDay = today.getDayOfMonth();
+        LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
         return billRecordRepository
-                .findUpcomingBills( email, currentYear, currentMonth, currentDay)
+                .findUpcomingBills( email, today, endOfMonth)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -89,11 +82,8 @@ public class BillRecordService {
 
         LocalDate today = LocalDate.now();
 
-        int currentYear = today.getYear();
-        Integer currentMonth = today.getMonthValue();
-        Integer currentDay = today.getDayOfMonth();
         return billRecordRepository
-                .findOverdueBills( email, currentYear, currentMonth, currentDay)
+                .findOverdueBills( email, today)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -102,12 +92,11 @@ public class BillRecordService {
     public List<BillRecordResponse> getPaidBills(String email) {
 
         LocalDate today = LocalDate.now();
+        LocalDate startOfMonth = today.withDayOfMonth(1);
+        LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
 
-        int currentYear = today.getYear();
-        Integer currentMonth = today.getMonthValue();
-        Integer currentDay = today.getDayOfMonth();
         return billRecordRepository
-                .findByBillUserEmailAndRecordYearAndRecordMonthAndPaidTrueOrderByPaidAtDesc( email, currentYear, currentMonth, currentDay)
+                .findByBillScheduleBillUserEmailAndPaidTrueAndDueDateBetween(email, startOfMonth, endOfMonth )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -116,77 +105,89 @@ public class BillRecordService {
 
     public void synchronizeBillRecords(String email) {
 
-        // Find new schedules for the current period
-        List<BillSchedule> newSchedules = billScheduleRepository.findByBillUserEmailAndBillActiveTrue(email);
-        // Create a timeSnapShot for today
-        TimeSnapshot timeSnapshot = TimeSnapshot.currentDate();
-        //Retrieve existing records per user
-        List<BillRecord> currentBillRecords = billRecordRepository.findByBillUserEmailAndRecordYearAndRecordMonth
-                (email, timeSnapshot.year(), timeSnapshot.month());
+        LocalDate today = LocalDate.now();
+        LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
 
-        Set<BillOccurrenceKey> existingKeys = currentBillRecords.stream()
-                .map(record -> new BillOccurrenceKey(record.getBillSchedule().getId(), record.getRecordMonth(), record.getRecordYear()))
-                .collect(Collectors.toSet());
+        List<BillSchedule> schedules = billScheduleRepository.findByActiveTrueAndNextDueDateLessThanEqual(endOfMonth);
+        for (BillSchedule schedule : schedules) {
 
-
-        for(BillSchedule schedule : newSchedules){
-
-            BillOccurrenceKey newKey = new BillOccurrenceKey(
-                    schedule.getId(),
-                    timeSnapshot.month(),
-                    timeSnapshot.year()
-            );
-
-            //Save the new record if it doesn't exist already
-            if(!existingKeys.contains(newKey)){
-                //Add the record to the db
+            do {
                 createBillRecord(schedule);
-            }
-        }
+                updateNextDueDate(schedule);
+            } while (!schedule.getNextDueDate().isAfter(endOfMonth));
 
+            billScheduleRepository.save(schedule);
+        }
+    }
+
+    private void updateNextDueDate(BillSchedule schedule) {
+
+        LocalDate nextDueDate = switch (schedule.getIntervalUnit()) {
+
+            case WEEK -> schedule.getNextDueDate().plusWeeks(schedule.getIntervalValue());
+            case MONTH -> schedule.getNextDueDate().plusMonths(schedule.getIntervalValue());
+            case YEAR -> schedule.getNextDueDate().plusYears(schedule.getIntervalValue());
+        };
+        schedule.setNextDueDate(nextDueDate);
     }
 
     public void createBillRecord(BillSchedule billSchedule) {
 
-        TimeSnapshot timeSnapshot = TimeSnapshot.currentDate();
-        YearMonth yearMonth = YearMonth.of(timeSnapshot.year(), timeSnapshot.month());
-
-        int actualDueDay = Math.min(
-                billSchedule.getDueDay(),
-                yearMonth.lengthOfMonth()
-        );
-
-        System.out.println(actualDueDay+" pppppppppppppppppppppppppppppp");
-         billSchedule.setDueDay(actualDueDay);
-        System.out.println(billSchedule.getDueDay()+" pppppppppppppppppppppppppppppp");
-
-        BillRecord newBillRecord = BillRecord.builder()
-                .bill(billSchedule.getBill())
+        BillRecord billRecord = BillRecord.builder()
                 .billSchedule(billSchedule)
-                .recordMonth(timeSnapshot.month())
-                .recordYear(timeSnapshot.year())
-                .actualAmount(billSchedule.getBill().getEstimatedAmount())
-                .paidAt(null)
+                .dueDate(billSchedule.getNextDueDate())
+                .estimatedAmount(billSchedule.getBill().getEstimatedAmount())
+                .paid(false)
                 .build();
-      billRecordRepository.save(newBillRecord);
 
+        billRecordRepository.save(billRecord);
     }
 
     private BillRecordResponse mapToResponse(BillRecord billRecord) {
+
+        Bill bill = billRecord.getBillSchedule().getBill();
+
         return new BillRecordResponse(
                 billRecord.getId(),
-                billRecord.getBill().getId(),
-                billRecord.getBillSchedule().getId(),
-                billRecord.getBill().getName(),
-                billRecord.getRecordMonth(),
-                billRecord.getRecordYear(),
-                billRecord.getBillSchedule().getDueDay(),
+                bill.getName(),
+                bill.getCategory(),
+                billRecord.getEstimatedAmount(),
                 billRecord.getActualAmount(),
-                billRecord.getPaidAt(),
-                billRecord.getCreatedAt()
+                billRecord.getDueDate(),
+                billRecord.isPaid(),
+                billRecord.getPaidDate(),
+                bill.getPaymentType(),
+                billRecord.getBillSchedule().isAutoPay()
         );
+    }
+
+
+    @Transactional
+    public void reversePayment(Long transactionId) {
+
+
+        BillRecord billRecord = billRecordRepository.findByTransaction_Id(transactionId)
+                .orElseThrow(() -> new RuntimeException("Bill record not found"));
+
+        billRecord.setPaid(false);
+        billRecord.setActualAmount(null);
+        billRecord.setPaidDate(null);
+        billRecord.setTransaction(null);
+
+        billRecordRepository.save(billRecord);
 
     }
 
 
+    @Transactional
+    public void processAutoPayBills(String email) {
+
+        LocalDate today = LocalDate.now();
+
+        List<BillRecord> billsToPay = billRecordRepository.findBillsReadyForAutoPay(email, today, PaymentType.FIXED);
+
+        for (BillRecord billRecord : billsToPay) {
+            markBillPaid(email, billRecord.getId(), today, billRecord.getEstimatedAmount(), true);
+        }
+    }
 }

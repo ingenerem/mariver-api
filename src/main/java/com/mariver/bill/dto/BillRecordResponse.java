@@ -1,10 +1,14 @@
 package com.mariver.bill.dto;
 
+import com.mariver.bill.BillCategory;
+import com.mariver.bill.PaymentType;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-public record BillRecordResponse(Long id, Long billId, Long billScheduleId,
-                                 String billName, Integer recordMonth,
-                                 Integer recordYear, Integer dueDay, BigDecimal actualAmount,
-                                 LocalDateTime paidAt, LocalDateTime createdAt) {
+public record BillRecordResponse(Long id, String billName, BillCategory category,
+                                 BigDecimal estimatedAmount, BigDecimal actualAmount,
+                                 LocalDate dueDate, boolean paid, LocalDate paidDate, PaymentType paymentType,
+                                 boolean autoPay) {
 }

@@ -11,12 +11,14 @@ import com.mariver.user.User;
 import com.mariver.user.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.loader.ast.spi.Loadable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -26,24 +28,34 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
-    private TransactionResponse transactionResponse;
 
     @Transactional
     public void createTransactions(String email, List<TransactionRequest> requests) {
         User user = getUserByEmail(email);
         Account account = getUserAccount(user);
-        requests.forEach(request -> createTransaction(user, account, request));
+        requests.forEach(request -> {
+            Transaction transaction = buildTransaction(user, account, request);
+            createTransaction(user, account, transaction);
+        });
 
     }
 
+    @Transactional
+    public Transaction createTransaction(String email, TransactionRequest request, boolean autoPay) {
+        User user = getUserByEmail(email);
+        Account account = getUserAccount(user);
+        Transaction transaction = buildTransaction(user, account, request);
+        transaction.setAutoPaid(autoPay);
+        return createTransaction(user, account, transaction);
 
-    public void createTransaction(User user, Account account, TransactionRequest request) {
+    }
 
-
+    private Transaction buildTransaction(User user, Account account, TransactionRequest request){
         validateTransactionRequest(request);
-        Transaction transaction = Transaction.builder()
+        return Transaction.builder()
                 .user(user)
                 .account(account)
+                .name(request.name())
                 .amount(request.amount())
                 .type(request.type())
                 .transactionSource(request.transactionSource())
@@ -56,18 +68,28 @@ public class TransactionService {
                 )
                 .status(TransactionStatus.POSTED)
                 .build();
+    }
+
+
+    @Transactional
+    public Transaction createTransaction(User user, Account account, Transaction transaction) {
 
         applyTransactionToAccount(account, transaction);
 
-        transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
         accountRepository.save(account);
+
+        return savedTransaction;
     }
 
-    public List<TransactionResponse> getCurrentMonthPostedTransactions(String email) {
 
+    public List<TransactionResponse> getCurrentMonthPostedTransactions(String email, YearMonth yearMonth) {
+
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
         DateRange dateRange = DateRange.currentMonth();
         return getPostedTransactionsByDateRange
-                (email, TransactionStatus.POSTED, dateRange.startDate(), dateRange.endDate());
+                (email, TransactionStatus.POSTED, startDate, endDate);
 
     }
 
@@ -90,7 +112,7 @@ public class TransactionService {
     }
 
     @Transactional
-    public void deleteTransaction(String email, Long transactionId) {
+    public Transaction deleteTransaction(String email, Long transactionId, String reason) {
         User user = getUserByEmail(email);
 
         Transaction transaction = transactionRepository.findById(transactionId)
@@ -110,16 +132,18 @@ public class TransactionService {
 
         transaction.setStatus(TransactionStatus.DELETED);
         transaction.setDeletedAt(LocalDateTime.now());
-        transaction.setDeleteReason("Deleted by user");
+        transaction.setDeleteReason(reason);
 
         transactionRepository.save(transaction);
         accountRepository.save(account);
+
+        return transaction;
     }
 
     private void applyTransactionToAccount(Account account, Transaction transaction) {
-        if (transaction.getType() == TransactionType.INCOME) {
+        if (transaction.getType() == TransactionType.INFLOW) {
             account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
-        } else if (transaction.getType() == TransactionType.EXPENSE) {
+        } else if (transaction.getType() == TransactionType.OUTFLOW) {
             account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
         } else {
             throw new RuntimeException("Unsupported transaction type");
@@ -127,9 +151,9 @@ public class TransactionService {
     }
 
     private void reverseTransactionFromAccount(Account account, Transaction transaction) {
-        if (transaction.getType() == TransactionType.INCOME) {
+        if (transaction.getType() == TransactionType.INFLOW) {
             account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
-        } else if (transaction.getType() == TransactionType.EXPENSE) {
+        } else if (transaction.getType() == TransactionType.OUTFLOW) {
             account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
         } else {
             throw new RuntimeException("Unsupported transaction type");
@@ -163,6 +187,7 @@ public class TransactionService {
     private TransactionResponse mapToResponse(Transaction transaction) {
         return new TransactionResponse(
                 transaction.getId(),
+                transaction.getName(),
                 transaction.getAmount(),
                 transaction.getType(),
                 transaction.getTransactionSource(),
@@ -170,7 +195,8 @@ public class TransactionService {
                 transaction.getDescription(),
                 transaction.getTransactionDate(),
                 transaction.getStatus(),
-                transaction.getCreatedAt()
+                transaction.getCreatedAt(),
+                transaction.isAutoPaid()
         );
     }
 
@@ -184,7 +210,7 @@ public class TransactionService {
         // Bills
         BigDecimal totalBills = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
                 email,
-                TransactionType.EXPENSE,
+                TransactionType.OUTFLOW,
                 TransactionSource.BILL,
                 TransactionStatus.POSTED,
                 startDate,
@@ -193,7 +219,7 @@ public class TransactionService {
         // Other spending
         BigDecimal totalSpending = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
                 email,
-                TransactionType.EXPENSE,
+                TransactionType.OUTFLOW,
                 TransactionSource.SPENDING,
                 TransactionStatus.POSTED,
                 startDate,
@@ -202,7 +228,7 @@ public class TransactionService {
         // Income
         BigDecimal totalIncome = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
                 email,
-                TransactionType.INCOME,
+                TransactionType.INFLOW,
                 TransactionSource.INCOME,
                 TransactionStatus.POSTED,
                 startDate,

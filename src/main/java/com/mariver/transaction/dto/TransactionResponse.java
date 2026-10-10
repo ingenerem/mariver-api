@@ -8,8 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-public record TransactionResponse(Long id, BigDecimal amount, TransactionType type,
+public record TransactionResponse(Long id,String name, BigDecimal amount, TransactionType type,
                                   TransactionSource transactionSource, String category, String description,
-                                  LocalDate transactionDate, TransactionStatus status, LocalDateTime createdAt// add String label
-                                  ) {
+                                  LocalDate transactionDate, TransactionStatus status, LocalDateTime createdAt, boolean autoPaid) {
 }
