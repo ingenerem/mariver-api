@@ -27,9 +27,9 @@ public class BillRecordService {
     private final AccountService accountService;
     private final TransactionService transactionService;
 
-
     @Transactional
-    public BillRecordResponse markBillPaid(String email, Long billRecordID, LocalDate paidDate, BigDecimal actualAmount, boolean autoPaid) {
+    public BillRecordResponse markBillPaid(String email, Long billRecordID, LocalDate paidDate, BigDecimal actualAmount,
+            boolean autoPaid) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -40,7 +40,6 @@ public class BillRecordService {
         Bill bill = billRecord.getBillSchedule().getBill();
         Account account = accountService.getAccountByEmail(email);
 
-
         TransactionRequest transactionRequest = new TransactionRequest(
                 bill.getName(),
                 actualAmount,
@@ -48,8 +47,7 @@ public class BillRecordService {
                 "Scheduled bill",
                 TransactionSource.BILL,
                 bill.getCategory().name(),
-                paidDate
-        );
+                paidDate);
         Transaction savedTransaction = transactionService.createTransaction(email, transactionRequest, autoPaid);
 
         billRecord.setPaidDate(paidDate);
@@ -61,7 +59,7 @@ public class BillRecordService {
         return mapToResponse(savedRecord);
     }
 
-    public BigDecimal getTotalUnpaidBills(String email){
+    public BigDecimal getTotalUnpaidBills(String email) {
 
         return billRecordRepository.getTotalUnpaidBills(email);
     }
@@ -71,19 +69,18 @@ public class BillRecordService {
         LocalDate today = LocalDate.now();
         LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
         return billRecordRepository
-                .findUpcomingBills( email, today, endOfMonth)
+                .findUpcomingBills(email, today, endOfMonth)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
-
 
     public List<BillRecordResponse> getOverdueBills(String email) {
 
         LocalDate today = LocalDate.now();
 
         return billRecordRepository
-                .findOverdueBills( email, today)
+                .findOverdueBills(email, today)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -96,12 +93,11 @@ public class BillRecordService {
         LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
 
         return billRecordRepository
-                .findByBillScheduleBillUserEmailAndPaidTrueAndDueDateBetween(email, startOfMonth, endOfMonth )
+                .findByBillScheduleBillUserEmailAndPaidTrueAndDueDateBetween(email, startOfMonth, endOfMonth)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
-
 
     public void synchronizeBillRecords(String email) {
 
@@ -133,12 +129,20 @@ public class BillRecordService {
 
     public void createBillRecord(BillSchedule billSchedule) {
 
-        BillRecord billRecord = BillRecord.builder()
-                .billSchedule(billSchedule)
-                .dueDate(billSchedule.getNextDueDate())
-                .estimatedAmount(billSchedule.getBill().getEstimatedAmount())
-                .paid(false)
-                .build();
+        LocalDate dueDate = billSchedule.getNextDueDate();
+
+        BillRecord billRecord = billRecordRepository
+                .findByBillScheduleIdAndDueDate(billSchedule.getId(), dueDate)
+                .orElseGet(() -> BillRecord.builder()
+                        .billSchedule(billSchedule)
+                        .dueDate(dueDate)
+                        .paid(false)
+                        .build());
+
+        if (!billRecord.isPaid()) {
+            billRecord.setEstimatedAmount(
+                    billSchedule.getBill().getEstimatedAmount());
+        }
 
         billRecordRepository.save(billRecord);
     }
@@ -157,14 +161,11 @@ public class BillRecordService {
                 billRecord.isPaid(),
                 billRecord.getPaidDate(),
                 bill.getPaymentType(),
-                billRecord.getBillSchedule().isAutoPay()
-        );
+                billRecord.getBillSchedule().isAutoPay());
     }
-
 
     @Transactional
     public void reversePayment(Long transactionId) {
-
 
         BillRecord billRecord = billRecordRepository.findByTransaction_Id(transactionId)
                 .orElseThrow(() -> new RuntimeException("Bill record not found"));
@@ -177,7 +178,6 @@ public class BillRecordService {
         billRecordRepository.save(billRecord);
 
     }
-
 
     @Transactional
     public void processAutoPayBills(String email) {

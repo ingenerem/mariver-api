@@ -70,4 +70,11 @@ public interface BillRecordRepository extends JpaRepository<BillRecord, Long> {
             @Param("today") LocalDate today,
             @Param("paymentType") PaymentType paymentType
     );
+
+    boolean existsByBillScheduleIdAndDueDate(Long id, LocalDate dueDate);
+
+    Optional<BillRecord> findByBillScheduleIdAndDueDate(
+        Long billScheduleId,
+        LocalDate dueDate
+);
 }
