@@ -59,10 +59,11 @@ public class BillRecordController {
     @PostMapping("{billRecordId}/{paidDate}/{amount}/pay")
     public ResponseEntity<BillRecordResponse> markBillPaid(
             Authentication authentication, @PathVariable Long billRecordId, @PathVariable LocalDate paidDate,
-            @PathVariable BigDecimal amount)
+            @PathVariable BigDecimal amount, @RequestParam(required = false) Long fundId)
     {
         User user = (User) authentication.getPrincipal();
-        return ResponseEntity.ok(billRecordService.markBillPaid(user.getEmail(), billRecordId, paidDate, amount, false));
+        return ResponseEntity.ok(
+                billRecordService.markBillPaid(user.getEmail(), billRecordId, paidDate, amount, false, fundId));
     }
 
 

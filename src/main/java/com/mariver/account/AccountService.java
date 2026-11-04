@@ -1,9 +1,16 @@
 package com.mariver.account;
 
+import com.mariver.transaction.Transaction;
+import com.mariver.transaction.TransactionService;
+import com.mariver.transaction.TransactionSource;
+import com.mariver.transaction.TransactionType;
+import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.user.User;
 import com.mariver.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -11,6 +18,7 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final TransactionService transactionService;
 
     public AccountResponse getMyAccount(String email) {
 
@@ -29,11 +37,17 @@ public class AccountService {
         Account account = accountRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 
-        account.setCurrentBalance(request.currentBalance());
+        TransactionRequest transactionRequest = new TransactionRequest(
+                "Balance",
+                request.currentBalance(),
+                TransactionType.ADJUSTMENT,
+                "Adjusting Balance",
+                TransactionSource.INCOME,
+                "Balance",
+                LocalDate.now(), null);
+        Transaction savedTransaction = transactionService.createTransaction(user.getEmail(),transactionRequest, false);
 
-        Account savedAccount = accountRepository.save(account);
-
-        return mapToResponse(savedAccount);
+        return mapToResponse(savedTransaction.getAccount());
     }
 
     private User getUserByEmail(String email) {

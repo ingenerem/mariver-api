@@ -3,6 +3,7 @@ package com.mariver.transaction;
 import com.mariver.account.Account;
 import com.mariver.account.AccountRepository;
 import com.mariver.common.utils.DateRange;
+import com.mariver.funds.FundService;
 import com.mariver.transaction.dto.TransactionCategoryTotal;
 import com.mariver.transaction.dto.TransactionRequest;
 import com.mariver.transaction.dto.TransactionResponse;
@@ -28,6 +29,7 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final FundService fundService;
 
     @Transactional
     public void createTransactions(String email, List<TransactionRequest> requests) {
@@ -50,8 +52,10 @@ public class TransactionService {
 
     }
 
-    private Transaction buildTransaction(User user, Account account, TransactionRequest request){
+    private Transaction buildTransaction(User user, Account account, TransactionRequest request) {
         validateTransactionRequest(request);
+
+        System.out.println((request.category()+" mamamiamamamamia"));
         return Transaction.builder()
                 .user(user)
                 .account(account)
@@ -64,15 +68,30 @@ public class TransactionService {
                 .transactionDate(
                         request.transactionDate() != null
                                 ? request.transactionDate()
-                                : LocalDate.now()
-                )
+                                : LocalDate.now())
                 .status(TransactionStatus.POSTED)
+                .fund(request.fundId() != null
+                                ? fundService.getFundById(account.getId(), request.fundId())
+                                : null)
                 .build();
     }
 
-
     @Transactional
     public Transaction createTransaction(User user, Account account, Transaction transaction) {
+
+        if (transaction.getType() == TransactionType.OUTFLOW) {
+
+            if (transaction.getFund() != null) {
+                fundService.deductFromFund(
+                        account.getId(),
+                        transaction.getFund().getId(),
+                        transaction.getAmount());
+            } else {
+                BigDecimal availableBalance = account.getCurrentBalance()
+                        .subtract(fundService.getTotalFundBalance(account.getId()));
+
+            }
+        }
 
         applyTransactionToAccount(account, transaction);
 
@@ -82,30 +101,26 @@ public class TransactionService {
         return savedTransaction;
     }
 
-
     public List<TransactionResponse> getCurrentMonthPostedTransactions(String email, YearMonth yearMonth) {
 
         LocalDate startDate = yearMonth.atDay(1);
         LocalDate endDate = yearMonth.atEndOfMonth();
         DateRange dateRange = DateRange.currentMonth();
-        return getPostedTransactionsByDateRange
-                (email, TransactionStatus.POSTED, startDate, endDate);
+        return getPostedTransactionsByDateRange(email, TransactionStatus.POSTED, startDate, endDate);
 
     }
 
     private List<TransactionResponse> getPostedTransactionsByDateRange(
             String email, TransactionStatus status,
             LocalDate startDate,
-            LocalDate endDate
-    ) {
+            LocalDate endDate) {
 
         return transactionRepository
                 .findByUserEmailAndStatusAndTransactionDateBetweenOrderByTransactionDateDescCreatedAtDesc(
                         email,
                         status,
                         startDate,
-                        endDate
-                )
+                        endDate)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -128,6 +143,15 @@ public class TransactionService {
 
         Account account = transaction.getAccount();
 
+        if (transaction.getType() == TransactionType.OUTFLOW
+                && transaction.getFund() != null) {
+
+            fundService.restoreToFund(
+                    account.getId(),
+                    transaction.getFund().getId(),
+                    transaction.getAmount());
+        }
+
         reverseTransactionFromAccount(account, transaction);
 
         transaction.setStatus(TransactionStatus.DELETED);
@@ -141,13 +165,14 @@ public class TransactionService {
     }
 
     private void applyTransactionToAccount(Account account, Transaction transaction) {
-        if (transaction.getType() == TransactionType.INFLOW) {
-            account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
-        } else if (transaction.getType() == TransactionType.OUTFLOW) {
-            account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
-        } else {
-            throw new RuntimeException("Unsupported transaction type");
-        }
+        BigDecimal newBalance = switch (transaction.getType()) {
+            case INFLOW -> account.getCurrentBalance().add(transaction.getAmount());
+            case OUTFLOW -> account.getCurrentBalance().subtract(transaction.getAmount());
+            case ADJUSTMENT -> transaction.getAmount();
+        };
+
+        account.setCurrentBalance(newBalance);
+
     }
 
     private void reverseTransactionFromAccount(Account account, Transaction transaction) {
@@ -155,8 +180,12 @@ public class TransactionService {
             account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
         } else if (transaction.getType() == TransactionType.OUTFLOW) {
             account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
+        } else if (transaction.getType() == TransactionType.ADJUSTMENT) {
+            throw new IllegalStateException(
+                    "Balance adjustments cannot be reversed. Please adjust your balance again."
+            );
         } else {
-            throw new RuntimeException("Unsupported transaction type");
+            throw new IllegalArgumentException("Unsupported transaction type");
         }
     }
 
@@ -196,10 +225,11 @@ public class TransactionService {
                 transaction.getTransactionDate(),
                 transaction.getStatus(),
                 transaction.getCreatedAt(),
-                transaction.isAutoPaid()
-        );
+                transaction.getFund() != null
+                        ? transaction.getFund().getName()
+                        : "Main Balance",
+                transaction.isAutoPaid());
     }
-
 
     @Transactional
     public TransactionSummaryResponse calculateSummaryTransactions(String email) {
@@ -214,8 +244,7 @@ public class TransactionService {
                 TransactionSource.BILL,
                 TransactionStatus.POSTED,
                 startDate,
-                endDate
-        );
+                endDate);
         // Other spending
         BigDecimal totalSpending = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
                 email,
@@ -223,8 +252,7 @@ public class TransactionService {
                 TransactionSource.SPENDING,
                 TransactionStatus.POSTED,
                 startDate,
-                endDate
-        );
+                endDate);
         // Income
         BigDecimal totalIncome = transactionRepository.sumAmountByTypeAndSourceAndDateRange(
                 email,
@@ -232,34 +260,29 @@ public class TransactionService {
                 TransactionSource.INCOME,
                 TransactionStatus.POSTED,
                 startDate,
-                endDate
-        );
+                endDate);
 
-        List<TransactionCategoryTotal> maxTransaction =
-                transactionRepository.findTopSpendingCategory(
-                        email,
-                        dateRange.startDate(),
-                        dateRange.endDate(),
-                        PageRequest.of(0, 1),
-                        TransactionSource.SPENDING
-                );
+        List<TransactionCategoryTotal> maxTransaction = transactionRepository.findTopSpendingCategory(
+                email,
+                dateRange.startDate(),
+                dateRange.endDate(),
+                PageRequest.of(0, 1),
+                TransactionSource.SPENDING);
 
         TransactionCategoryTotal topSpendingCategory = maxTransaction.isEmpty() ? null : maxTransaction.getFirst();
 
-
-        List<TransactionCategoryTotal> maxBill =
-                transactionRepository.findTopSpendingCategory(
-                        email,
-                        dateRange.startDate(),
-                        dateRange.endDate(),
-                        PageRequest.of(0, 1),
-                        TransactionSource.BILL
-                );
+        List<TransactionCategoryTotal> maxBill = transactionRepository.findTopSpendingCategory(
+                email,
+                dateRange.startDate(),
+                dateRange.endDate(),
+                PageRequest.of(0, 1),
+                TransactionSource.BILL);
 
         TransactionCategoryTotal topBillCategory = maxBill.isEmpty() ? null : maxBill.getFirst();
 
         BigDecimal totalExpenses = totalSpending.add(totalBills);
-        return new TransactionSummaryResponse(totalIncome, totalExpenses,totalBills, totalSpending, topSpendingCategory,topBillCategory );
+        return new TransactionSummaryResponse(totalIncome, totalExpenses, totalBills, totalSpending,
+                topSpendingCategory, topBillCategory);
 
     }
 }
