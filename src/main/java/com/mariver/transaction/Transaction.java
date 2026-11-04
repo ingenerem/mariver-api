@@ -1,6 +1,7 @@
 package com.mariver.transaction;
 
 import com.mariver.account.Account;
+import com.mariver.funds.Fund;
 import com.mariver.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -77,4 +78,8 @@ public class Transaction {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fund_id")
+    private Fund fund;
 }

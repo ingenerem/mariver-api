@@ -1,11 +1,17 @@
 package com.mariver.bill;
 
-
 import com.mariver.bill.dto.BillResponse;
+import com.mariver.account.Account;
+import com.mariver.account.AccountService;
 import com.mariver.bill.dto.BillRequest;
 import com.mariver.bill.dto.BillScheduleResponse;
+import com.mariver.funds.Fund;
+import com.mariver.funds.FundService;
 import com.mariver.user.User;
 import com.mariver.user.UserRepository;
+
+import lombok.AllArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,23 +19,14 @@ import java.time.YearMonth;
 import java.util.List;
 
 @Service
+@AllArgsConstructor
 public class BillService {
 
     private final BillRepository billRepository;
     private final BillScheduleRepository billScheduleRepository;
     private final UserRepository userRepository;
-    private final BillRecordService billRecordService;
-
-    public BillService(
-            BillRepository billRepository,
-            BillScheduleRepository billScheduleRepository,
-            UserRepository userRepository, BillRecordService billRecordService)
-    {
-        this.billRepository = billRepository;
-        this.billScheduleRepository = billScheduleRepository;
-        this.userRepository = userRepository;
-        this.billRecordService = billRecordService;
-    }
+    private final FundService fundService;
+    private final AccountService accountService;
 
     @Transactional
     public BillResponse createBill(String email, BillRequest request) {
@@ -46,7 +43,6 @@ public class BillService {
                 .map(this::toResponse)
                 .toList();
     }
-
 
     public List<BillResponse> getAllBills(String email) {
         User user = getUserByEmail(email);
@@ -152,9 +148,10 @@ public class BillService {
                         schedule.getIntervalUnit(),
                         schedule.getStartDate(),
                         schedule.isAutoPay(),
-                        schedule.getNextDueDate()
-                )
-        );
+                        schedule.getNextDueDate()),
+                schedule.getFund() != null
+                        ? schedule.getFund().getId()
+                        : null);
     }
 
     @Transactional
@@ -171,7 +168,7 @@ public class BillService {
             throw new IllegalArgumentException("Auto pay is not supported for variable bills");
         }
         if (billRepository.existsByUserAndNameIgnoreCase(user, billName)) {
-            throw new IllegalArgumentException("A bill named '" + billName +"' already exists");
+            throw new IllegalArgumentException("A bill named '" + billName + "' already exists");
         }
 
         validateSchedule(request);

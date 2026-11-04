@@ -9,31 +9,21 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record BillRequest(
-        @NotBlank
-        String name,
+                @NotBlank String name,
 
-        @NotNull
-        @DecimalMin(value = "0.01")
-        BigDecimal amount,
+                @NotNull @DecimalMin(value = "0.01") BigDecimal amount,
 
-        @NotNull
-        BillCategory category,
+                @NotNull BillCategory category,
 
-        @NotNull
-        @Min(1)
-        Integer intervalValue,
+                @NotNull @Min(1) Integer intervalValue,
 
-        @NotNull
-        IntervalUnit intervalUnit,
+                @NotNull IntervalUnit intervalUnit,
 
-        @NotNull
-        @FutureOrPresent
-        LocalDate startDate,
+                @NotNull @FutureOrPresent LocalDate startDate,
 
-        @NotNull
-        boolean autoPay,
+                @NotNull boolean autoPay,
 
-        @NotNull
-        PaymentType paymentType)
+                @NotNull PaymentType paymentType)
+
 {
 }
